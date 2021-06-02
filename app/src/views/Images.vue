@@ -30,6 +30,15 @@
           <v-icon>mdi-label-off</v-icon>
         </v-btn>
 
+        <v-btn @click="addActorsDialog = true" icon v-if="selectedImages.length">
+          <v-tooltip bottom>
+            <template v-slot:activator="{ on, attrs }">
+              <v-icon v-bind="attrs" v-on="on">mdi-account-plus</v-icon>
+            </template>
+            <span>Add actors to selected images</span>
+          </v-tooltip>
+        </v-btn>
+
         <v-btn
           v-if="selectedImages.length"
           @click="deleteSelectedImagesDialog = true"
@@ -37,6 +46,7 @@
           color="error"
           ><v-icon>mdi-delete-forever</v-icon>
         </v-btn>
+
       </template>
     </v-banner>
 
@@ -351,6 +361,29 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog :persistent="addLoader" scrollable v-model="addActorsDialog" max-width="400px">
+      <v-card :loading="addLoader">
+        <!-- <v-card-title
+          >Add {{ addActorsIndices.length }}
+          {{ addActorsIndices.length === 1 ? "actor" : "actors" }}</v-card-title
+        > -->
+
+        <v-card-title
+          >Add actors to selected images</v-card-title
+        >
+
+        <v-card-text style="max-height: 400px">
+          <ActorSelector v-model="addActors"/>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn :loading="addLoader" class="text-none" color="primary" text @click="addActorsToImages"
+            >Add</v-btn
+          >
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <transition name="fade">
       <Lightbox
         @update="updateImage"
@@ -561,6 +594,9 @@ export default class ImageList extends mixins(DrawerMixin) {
   addLabelsIndices: number[] = [];
   addLabelsSearchQuery = "";
   addLoader = false;
+  addActorsDialog = false;
+  addActorsIndices: number[] = [];
+  addActors = [] as IActor[];
 
   subtractLabelsDialog = false;
   subtractLabelsIndices: number[] = [];
@@ -587,6 +623,28 @@ export default class ImageList extends mixins(DrawerMixin) {
         labels: labelIds,
       },
     });
+  }
+
+  async addActorsToImage(image: IImage): Promise<void> {
+    // get array of existing actor ids of the current image
+    const existingActorIds = image.actors.map((a) => a._id);
+    const newActorIds = this.addActors.map((a) => a._id).concat(existingActorIds);
+
+    await ApolloClient.mutate({
+      mutation: gql`
+        mutation($ids: [String!]!, $opts: ImageUpdateOpts!) {
+          updateImages(ids: $ids, opts: $opts) {
+            _id
+          }
+        }
+      `,
+      variables: {
+        ids: [image._id],
+        opts: {
+          actors: newActorIds,
+        },
+      },
+    })
   }
 
   async removeLabelFromImage(imageId: string, labelId: string): Promise<void> {
@@ -651,6 +709,30 @@ export default class ImageList extends mixins(DrawerMixin) {
       console.error(error);
     }
     this.addLoader = false;
+  }
+
+  async addActorsToImages(): Promise<void> {
+    try {
+      this.addLoader = true;
+
+      for (let i = 0; i < this.selectedImages.length; i++) {
+        const id = this.selectedImages[i];
+        const image = this.images.find((img) => img._id == id);
+
+        if (image) {
+          await this.addActorsToImage(image);
+        }
+      }
+
+      // Refresh page
+      await this.loadPage();
+      this.addLoader = false;
+    } catch (error) {
+      console.error(error);
+    }
+
+    this.addLoader = false;
+    this.addActorsDialog = false;
   }
 
   isImageSelected(id: string) {
