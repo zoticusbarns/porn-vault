@@ -102,13 +102,21 @@
           :items="allLabels"
         />
 
-        <Divider icon="mdi-account">Actors</Divider>
+        <Divider icon="mdi-account">{{ actorPlural }}</Divider>
 
         <ActorSelector
           :value="searchState.selectedActors"
           @input="searchStateManager.onValueChanged('selectedActors', $event)"
           :multiple="true"
+          :disabled="searchState.showEmptyField === 'actors'"
         />
+
+        <v-checkbox
+          v-model="searchState.showEmptyField"
+          value="actors"
+          @change="searchStateManager.onValueChanged('showEmptyField', $event)"
+          :label="`Filter by images with no tagged ${(actorPlural || '').toLowerCase()}`"
+        ></v-checkbox>
 
         <Divider icon="mdi-sort">Sort</Divider>
 
@@ -130,7 +138,7 @@
           solo
           flat
           single-line
-          :disabled="searchState.sortBy == 'relevance' || searchState.sortBy == '$shuffle'"
+          :disabled="searchState.sortBy === 'relevance' || searchState.sortBy === '$shuffle'"
           hide-details
           color="primary"
           item-text="text"
@@ -386,6 +394,10 @@ import { Dictionary } from "vue-router/types/router";
   },
 })
 export default class ImageList extends mixins(DrawerMixin) {
+  get actorPlural() {
+    return contextModule.actorPlural;
+  }
+
   addNewItem(image: IImage) {
     this.images.unshift(image);
   }
@@ -419,6 +431,7 @@ export default class ImageList extends mixins(DrawerMixin) {
     selectedActors: IActor[];
     sortBy: string;
     sortDir: string;
+    showEmptyField: string;
   }>({
     localStorageNamer: (key: string) => `pm_image${key[0].toUpperCase()}${key.substr(1)}`,
     props: {
@@ -446,6 +459,7 @@ export default class ImageList extends mixins(DrawerMixin) {
       sortDir: {
         default: () => "desc",
       },
+      showEmptyField: {default: () => ""},
     },
   });
 
@@ -568,7 +582,7 @@ export default class ImageList extends mixins(DrawerMixin) {
   async addLabelsToImage(imageId: string, labelIds: string[]): Promise<void> {
     await ApolloClient.mutate({
       mutation: gql`
-        mutation($item: String!, $labels: [String!]!) {
+        mutation ($item: String!, $labels: [String!]!) {
           attachLabels(item: $item, labels: $labels)
         }
       `,
@@ -582,7 +596,7 @@ export default class ImageList extends mixins(DrawerMixin) {
   async removeLabelFromImage(imageId: string, labelId: string): Promise<void> {
     await ApolloClient.mutate({
       mutation: gql`
-        mutation($item: String!, $label: String!) {
+        mutation ($item: String!, $label: String!) {
           removeLabel(item: $item, label: $label)
         }
       `,
@@ -696,7 +710,7 @@ export default class ImageList extends mixins(DrawerMixin) {
   deleteSelection() {
     ApolloClient.mutate({
       mutation: gql`
-        mutation($ids: [String!]!) {
+        mutation ($ids: [String!]!) {
           removeImages(ids: $ids)
         }
       `,
@@ -720,7 +734,7 @@ export default class ImageList extends mixins(DrawerMixin) {
   removeImage(index: number) {
     ApolloClient.mutate({
       mutation: gql`
-        mutation($ids: [String!]!) {
+        mutation ($ids: [String!]!) {
           removeImages(ids: $ids)
         }
       `,
@@ -759,7 +773,7 @@ export default class ImageList extends mixins(DrawerMixin) {
   async fetchPage(page: number, take = 24, random?: boolean, seed?: string) {
     const result = await ApolloClient.query({
       query: gql`
-        query($query: ImageSearchQuery!, $seed: String) {
+        query ($query: ImageSearchQuery!, $seed: String) {
           getImages(query: $query, seed: $seed) {
             numItems
             numPages
@@ -808,6 +822,7 @@ export default class ImageList extends mixins(DrawerMixin) {
           bookmark: this.searchState.bookmarksOnly,
           rating: this.searchState.ratingFilter,
           actors: this.selectedActorIds,
+          emptyField: this.searchState.showEmptyField,
         },
         seed: seed || localStorage.getItem("pm_seed") || "default",
       },
@@ -823,6 +838,10 @@ export default class ImageList extends mixins(DrawerMixin) {
   loadPage() {
     this.fetchLoader = true;
     this.selectedImages = [];
+
+    if (this.searchState.showEmptyField === 'actors') {
+      this.searchState.selectedActors = [];
+    }
 
     return this.fetchPage(this.searchState.page)
       .then((result) => {

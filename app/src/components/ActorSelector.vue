@@ -12,14 +12,15 @@
       :search-input.sync="searchQuery"
       cache-items
       hide-no-data
-      hint="Search for actors by typing something"
-      :label="multiple ? 'Select actors' : 'Select actor'"
+      @hint="'Search for ' + actorPlural.toLowerCase() + ' by typing something'"
+      :label="multiple ? 'Select ' + actorSingular.toLowerCase() : 'Select ' + actorPlural.toLowerCase()"
       :multiple="multiple"
       item-text="name"
       item-value="_id"
       clearable
       @change="onInnerValueChange"
       hide-details="auto"
+      :disabled="disabled"
     >
       <template v-slot:item="{ item }">
         <template>
@@ -44,11 +45,13 @@ import ApolloClient from "../apollo";
 import gql from "graphql-tag";
 import actorFragment from "../fragments/actor";
 import IActor from "../types/actor";
+import { contextModule } from "@/store/context";
 
 @Component
 export default class ActorSelector extends Vue {
   @Prop() value!: IActor[];
   @Prop({ default: true }) multiple!: boolean;
+  @Prop({ default: false}) disabled!: boolean;
 
   innerValue = JSON.parse(JSON.stringify(this.value)) || [];
 
@@ -68,6 +71,14 @@ export default class ActorSelector extends Vue {
       "input",
       newVal.map((id) => this.actors.find((a) => a._id == id)).filter(Boolean) as IActor[]
     );
+  }
+
+  get actorSingular() {
+    return contextModule.actorSingular;
+  }
+
+  get actorPlural() {
+    return contextModule.actorPlural;
   }
 
   thumbnail(actor: IActor) {
